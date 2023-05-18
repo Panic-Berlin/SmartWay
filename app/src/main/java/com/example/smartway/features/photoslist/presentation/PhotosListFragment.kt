@@ -26,42 +26,44 @@ class PhotosListFragment : Fragment(R.layout.fragment_photos_list) {
 
     private val viewBinding: FragmentPhotosListBinding by viewBinding(FragmentPhotosListBinding::bind)
     private val viewModel: PhotosListViewModel by viewModels()
-    private var page = 1
-    private var pageSize = 30
-
     private var photoItems: MutableList<PhotoItem> = mutableListOf()
-    private var manager: GridLayoutManager? = null
 
     private var isLoading = false
     private var isLastPage = false
+
+    private var page = 1
     private var position = -1
+    private var pageSize = 30
 
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        if (savedInstanceState != null){
-            photoItems = savedInstanceState.getParcelableArrayList(PHOTO_KEY)!!
-            position = savedInstanceState.getInt(POSITION_KEY)
-            page = savedInstanceState.getInt(PAGE_KEY)
+        if (savedInstanceState != null) {
+            viewModel.getSavedInstanceState(
+                savedPhotos = savedInstanceState.getParcelableArrayList(PHOTO_KEY)!!,
+                savedPosition = savedInstanceState.getInt(POSITION_KEY),
+                savedPage = savedInstanceState.getInt(PAGE_KEY)
+            )
         }
-        initViews()
-        observe()
+        val manager = GridLayoutManager(requireContext(), 3)
+        initViews(manager)
+        observe(manager)
     }
 
-    private fun initViews() {
-        viewModel.getPhotos(page, pageSize)
-        manager = GridLayoutManager(requireContext(), 3)
-        viewBinding.rvPhotos.addOnScrollListener(object : RecyclerView.OnScrollListener(){
+    private fun initViews(manager: GridLayoutManager) {
+        viewBinding.rvPhotos.layoutManager = manager
+        viewBinding.rvPhotos.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
-                position = manager?.findFirstCompletelyVisibleItemPosition()!!
-                val visibleItem = manager?.childCount
-                val totalItem = manager?.itemCount
-                val firstVisibleItemPosition = manager?.findFirstVisibleItemPosition()
-                if (!isLoading && !isLastPage){
-                    if ((visibleItem!! + firstVisibleItemPosition!! >= totalItem!!)
+                position = manager.findFirstCompletelyVisibleItemPosition()
+                val visibleItem = manager.childCount
+                val totalItem = manager.itemCount
+                val firstVisibleItemPosition = manager.findFirstVisibleItemPosition()
+                if (!isLoading && !isLastPage) {
+                    if ((visibleItem + firstVisibleItemPosition >= totalItem)
                         && firstVisibleItemPosition >= 0 &&
-                            totalItem >= pageSize){
+                        totalItem >= pageSize
+                    ) {
                         page++
                         isLoading = true
                         viewModel.getPhotos(page, pageSize)
@@ -72,36 +74,55 @@ class PhotosListFragment : Fragment(R.layout.fragment_photos_list) {
         })
     }
 
-    private fun observe() {
-        viewBinding.rvPhotos.layoutManager = manager
+    private fun observe(manager: GridLayoutManager) {
+        viewModel.getSavedPhoto.observe(viewLifecycleOwner) {
+            photoItems = it
+        }
+        viewModel.getSavedPosition.observe(viewLifecycleOwner) {
+            position = it
+            manager.scrollToPosition(it)
+        }
+        viewModel.getSavedPage.observe(viewLifecycleOwner) {
+            page = it + 1
+        }
         viewModel.photos.observe(viewLifecycleOwner) {
             when (it) {
                 is ViewState.Show -> {
                     viewBinding.pbProgress.isVisible = false
                     photoItems += it.data
-                    viewBinding.rvPhotos.adapter = PhotosAdapter(photoItems){ photo ->
+                    viewBinding.rvPhotos.adapter = PhotosAdapter(photoItems) { photo ->
                         viewModel.onPhotoClick(photo)
                     }
                     isLoading = false
-                    isLastPage = if (it.data.isNotEmpty()){
+                    isLastPage = if (it.data.isNotEmpty()) {
                         it.data.size < pageSize
-                    }else true
-                    manager?.scrollToPosition(position)
+                    } else true
+                    manager.scrollToPosition(position)
                 }
                 is ViewState.Error -> {
                     isLoading = false
-                    view?.let { _view -> Snackbar.make(_view, R.string.error, Snackbar.LENGTH_LONG).show() }
+                    view?.let { _view ->
+                        Snackbar.make(_view, R.string.error, Snackbar.LENGTH_LONG).show()
+                    }
                 }
                 else -> {
                     isLoading = false
-                    view?.let { _view -> Snackbar.make(_view, R.string.something_went_wrong, Snackbar.LENGTH_LONG).show() }
+                    view?.let { _view ->
+                        Snackbar.make(
+                            _view,
+                            R.string.something_went_wrong,
+                            Snackbar.LENGTH_LONG
+                        ).show()
+                    }
                 }
             }
         }
-        viewModel.goToPhoto.observe(viewLifecycleOwner){
-            findNavController().navigate(R.id.action_photosListFragment_to_photoFragment, bundleOf(
-                "photo" to it.urls.regular
-            ))
+        viewModel.goToPhoto.observe(viewLifecycleOwner) {
+            findNavController().navigate(
+                R.id.action_photosListFragment_to_photoFragment, bundleOf(
+                    "photo" to it.urls.regular
+                )
+            )
         }
     }
 

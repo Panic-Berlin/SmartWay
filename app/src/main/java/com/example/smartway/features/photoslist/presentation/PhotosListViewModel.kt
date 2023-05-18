@@ -14,23 +14,39 @@ import javax.inject.Inject
 @HiltViewModel
 class PhotosListViewModel @Inject constructor(
     private val photosInteractor: PhotosInteractor
-) : ViewModel(){
+) : ViewModel() {
 
     private val _photos = MutableLiveData<ViewState<List<PhotoItem>>>()
     val photos get() = _photos.asLiveData()
 
     val goToPhoto = SingleLiveEvent<PhotoItem>()
+    val getSavedPhoto = SingleLiveEvent<MutableList<PhotoItem>>()
+    val getSavedPosition = SingleLiveEvent<Int>()
+    val getSavedPage = SingleLiveEvent<Int>()
 
 
+    init {
+        getPhotos(1, 30)
+    }
 
-    fun getPhotos(page: Int, perPage: Int){
+    fun getPhotos(page: Int, perPage: Int) {
         viewModelScope.launch {
             _photos.value = photosInteractor.getPhotos(page, perPage).asViewState()
             Log.d("PhotosViewModel", "getPhotos: ${_photos.value}")
         }
     }
 
-    fun onPhotoClick(photo: PhotoItem){
+    fun onPhotoClick(photo: PhotoItem) {
         goToPhoto.call(photo)
+    }
+
+    fun getSavedInstanceState(
+        savedPhotos: MutableList<PhotoItem>,
+        savedPosition: Int,
+        savedPage: Int
+    ) {
+        getSavedPhoto.call(savedPhotos)
+        getSavedPosition.call(savedPosition)
+        getSavedPage.call(savedPage)
     }
 }
